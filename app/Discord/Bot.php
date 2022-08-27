@@ -6,6 +6,7 @@ use App\Discord\Commands\Dota2\AddRoleCommand;
 use App\Discord\Commands\Dota2\CreatePartyCommand;
 use App\Discord\Commands\Dota2\DeleteDotaCommand;
 use App\Discord\Commands\Dota2\JoinPartyCommand;
+use App\Discord\Commands\Dota2\KickMemberCommand;
 use App\Discord\Commands\Dota2\LeavePartyCommand;
 use App\Discord\Commands\Dota2\PartyCommand;
 use App\Discord\Commands\Dota2\RefreshRolesCommand;
@@ -31,7 +32,8 @@ class Bot extends Discord
         AddRoleCommand::class,
         RemoveRoleCommand::class,
         RefreshRolesCommand::class,
-        DeleteDotaCommand::class
+        DeleteDotaCommand::class,
+        KickMemberCommand::class
     ];
 
     public function __construct()

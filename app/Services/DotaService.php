@@ -10,6 +10,10 @@ class DotaService
 {
     public static function joinParty(DiscordMember $member, DotaParty $party, bool $bLeader = false): void
     {
+        if ($member->dotaParties()->exists($party)) {
+            throw new Exception('You are already in this party');
+        }
+
         $member->dotaParties->each(fn (DotaParty $dotaParty) => static::leaveParty($member, $dotaParty));
 
         if ($party->members()->count() > 4) {
@@ -24,14 +28,16 @@ class DotaService
 
     public static function leaveParty(DiscordMember $member, DotaParty $party): void
     {
+        $bLeader = $member->is($party->members()->wherePivot('is_leader', true)->first());
+
         $party->members()->detach($member);
 
         if (!$party->members()->count()) {
             $party->delete();
         }
 
-        if ($member->is($party->members()->wherePivot('is_leader', true)->first())) {
-            $party->members()->updateExistingPivot($party->members()->random(), [
+        if ($bLeader) {
+            $party->members()->updateExistingPivot($party->members->random(), [
                 'is_leader' => true
             ]);
         }
@@ -56,58 +62,72 @@ class DotaService
     {
         $info = "Party number: {$party->id}\n";
 
-        $party->members->each(function (DiscordMember $member) use (&$info) {
-            $info .= "{$member->mention} {$member->discord_leader_emoji} " . implode(', ', $member->pivot->roles) . "\n";
+        $party->members->each(function (DiscordMember $member, int $index) use (&$info) {
+            $info .= $index + 1 . ". {$member->mention} {$member->discord_leader_emoji} " . implode(', ', $member->pivot->roles) . "\n";
         });
 
         return $info;
     }
 
-    public static function rollMember(DiscordMember $member, array $roles): int
+    public static function rollMember(array $members): ?DiscordMember
     {
-        $nRoles = count($member->pivot->roles);
-
-        if (!$nRoles) {
-            return 0;
+        if (!count($members)) {
+            return null;
         }
 
+        $member = $members[array_rand($members)];
+
+        return $member;
+    }
+
+    public static function setRole(DiscordMember $member, int $role): bool
+    {
         $memberRoles = $member->pivot->roles;
 
-        $diffedRoles = array_diff($roles, $memberRoles);
-
-        $filteredRoles = array_filter($roles, fn (int $role) => !in_array($role, $diffedRoles));
-
-        $role = $filteredRoles[array_rand($filteredRoles)];
+        if (!in_array($role, $memberRoles)) {
+            return false;
+        }
 
         $memberRoleKey = array_search($role, $memberRoles);
 
         unset($memberRoles[$memberRoleKey]);
 
         $member->pivot->roles = array_values($memberRoles);
-
         $member->pivot->current_role = $role;
         $member->pivot->save();
 
-        return $role;
+        return true;
     }
 
     public static function rollParty(DotaParty $party): string
     {
+        $roles = [];
+
+        $party->members->each(function (DiscordMember $member) use (&$roles): void {
+            foreach ($member->pivot->roles as $role) {
+                $roles[$role][] = $member;
+            }
+        });
+
+        if (count($roles) < $party->members->count()) {
+            return 'Not enough roles selected';
+        }
+
         $rollInfo = "Party {$party->id} roll\n";
 
-        $availableRoles = DotaParty::DEFAULT_ROLES;
+        $rolledMembers = [];
 
-        $party->members->sort(fn (DiscordMember $member) => count($member->pivot->roles))->each(function (DiscordMember $member) use (&$availableRoles, &$rollInfo) {
-            $role = static::rollMember($member, $availableRoles);
+        foreach ($roles as $role => $members) {
+            $member = static::rollMember(array_diff($members, $rolledMembers));
 
-            $roleKey = array_search($role, $availableRoles);
-
-            if ($roleKey !== false) {
-                unset($availableRoles[$roleKey]);
+            if (!$member || !static::setRole($member, $role)) {
+                continue;
             }
 
+            $rolledMembers[] = $member;
+
             $rollInfo .= "{$member->mention} {$member->discord_leader_emoji}" . " $role\n";
-        });
+        }
 
         return $rollInfo;
     }

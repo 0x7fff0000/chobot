@@ -15,4 +15,9 @@ class DotaParty extends Model
     {
         return $this->belongsToMany(DiscordMember::class)->using(DiscordMemberDotaParty::class)->withPivot('current_role', 'roles', 'is_leader');
     }
+
+    public function hasMember(DiscordMember $discordMember): bool
+    {
+        return $this->members()->where($discordMember->getForeignKey(), $discordMember->id)->limit(1)->exists();
+    }
 }
