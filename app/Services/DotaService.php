@@ -159,8 +159,12 @@ class DotaService
 
         $validRoles = array_unique($validRoles);
 
-        if (count($validRoles) > DotaParty::MAX_ROLES) {
+        $nValidRoles = count($validRoles);
+
+        if ($nValidRoles > DotaParty::MAX_ROLES) {
             $validRoles = array_slice($validRoles, 0, DotaParty::MAX_ROLES);
+        } else if (!$nValidRoles) {
+            throw new Exception('Invalid roles');
         }
 
         $party->members()->updateExistingPivot($member, [
